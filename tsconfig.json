@@ -10,7 +10,14 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
