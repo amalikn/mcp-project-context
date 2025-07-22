@@ -454,7 +454,14 @@ export class MCPProjectContextServer {
 
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
+    console.error("About to connect transport");
     await this.server.connect(transport);
     console.error("MCP Project Context Server connected and listening");
+
+    // Keep the process alive
+    process.stdin.on("close", () => {
+      console.error("Transport closed");
+      process.exit(0);
+    });
   }
 }
