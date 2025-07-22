@@ -69,16 +69,17 @@ chmod +x dist/index.js
 mkdir -p ~/.claude
 ```
 
-2. **Add your server configuration to `~/.claude/mcp.json`:**
+2. **Add your server configuration to `~/.claude.json:**
 ```json
 {
-  "mcpServers": {
-    "project-context": {
-      "command": "node",
-      "args": ["dist/index.js"],
-      "cwd": "/absolute/path/to/your/mcp-project-context"
+    "mcpServers": {
+      "mcp-project-context": {
+        "type": "stdio",
+        "command": "/path/to/mcp-project-context/dist/index.js",
+        "args": [],
+        "env": {}
+      }
     }
-  }
 }
 ```
 
