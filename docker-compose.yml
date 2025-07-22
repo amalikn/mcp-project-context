@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  mcp-project-context:
+    build: .
+    container_name: mcp-project-context
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+    stdin_open: true
+    tty: true
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
