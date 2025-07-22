@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { MCPProjectContextServer } from "./server.js";
 
 async function main() {
