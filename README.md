@@ -266,4 +266,5 @@ MIT License - see LICENSE file for details
 For issues related to:
 - **MCP Protocol**: See [Model Context Protocol documentation](https://modelcontextprotocol.io/)
 - **Claude Code**: See [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code)
+- **READ THE DOCS**: See [official TS SDK for MCP](https://github.com/modelcontextprotocol/typescript-sdk)
 - **This Server**: Open an issue in this repository
