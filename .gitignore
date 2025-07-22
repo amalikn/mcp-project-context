@@ -1,0 +1,18 @@
+# .gitignore file
+# Data directories - contains sensitive project info
+data/
+*.log
+
+# Node.js
+node_modules/
+dist/
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
