@@ -193,6 +193,8 @@ export class MCPProjectContextServer {
             status: "todo",
             priority,
             tags: tags || [],
+            blockers: [],
+            dependencies: [],
           });
           return {
             content: [
@@ -454,9 +456,8 @@ export class MCPProjectContextServer {
 
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
-    console.error("About to connect transport");
     await this.server.connect(transport);
-    console.error("MCP Project Context Server connected and listening");
+    console.log("MCP Project Context Server connected and listening");
 
     // Keep the process alive
     process.stdin.on("close", () => {
