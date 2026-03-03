@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import fs from "fs-extra";
+import path from "path";
 import { z } from "zod";
 import { ProjectStore } from "./storage/project-store.js";
 import { ContextManager } from "./storage/context-manager.js";
@@ -11,6 +13,22 @@ export class MCPProjectContextServer {
   private contextManager: ContextManager;
   private activeTools: Set<string>;
   private selectedToolProfile: string;
+
+  private static readonly MUTATING_TOOLS = new Set<string>([
+    "create_project",
+    "add_task",
+    "update_task",
+    "add_note",
+    "record_decision",
+    "cache_file",
+    "start_session",
+    "end_session",
+    "create_checkpoint",
+    "restore_checkpoint",
+    "restore_latest_checkpoint",
+    "delete_checkpoint",
+    "prepare_compaction",
+  ]);
 
   constructor() {
     this.server = new McpServer({
@@ -31,6 +49,8 @@ export class MCPProjectContextServer {
       "tool_profile_status",
       "set_tool_profile",
       "tool_profile_snippets",
+      "recovery_status",
+      "recovery_resolve",
       "create_project",
       "get_project_context",
       "list_projects",
@@ -48,6 +68,7 @@ export class MCPProjectContextServer {
       "list_checkpoints",
       "restore_latest_checkpoint",
       "delete_checkpoint",
+      "prepare_compaction",
     ] as const;
 
     const profiles: Record<string, string[]> = {
@@ -55,6 +76,8 @@ export class MCPProjectContextServer {
         "tool_profile_status",
         "set_tool_profile",
         "tool_profile_snippets",
+        "recovery_status",
+        "recovery_resolve",
         "create_project",
         "get_project_context",
         "list_projects",
@@ -64,11 +87,14 @@ export class MCPProjectContextServer {
         "end_session",
         "create_checkpoint",
         "restore_latest_checkpoint",
+        "prepare_compaction",
       ],
       standard: [
         "tool_profile_status",
         "set_tool_profile",
         "tool_profile_snippets",
+        "recovery_status",
+        "recovery_resolve",
         "create_project",
         "get_project_context",
         "list_projects",
@@ -85,6 +111,7 @@ export class MCPProjectContextServer {
         "restore_checkpoint",
         "list_checkpoints",
         "restore_latest_checkpoint",
+        "prepare_compaction",
       ],
       full: [...allTools],
     };
@@ -113,7 +140,38 @@ export class MCPProjectContextServer {
       return;
     }
 
-    this.server.registerTool(name, definition, handler);
+    this.server.registerTool(name, definition, async (args: any) => {
+      const isMutating = MCPProjectContextServer.MUTATING_TOOLS.has(name);
+      let captureId: string | null = null;
+
+      if (isMutating) {
+        captureId = await this.beginRecoveryCapture(name, args || {});
+      }
+
+      try {
+        const result = await handler(args);
+        if (captureId) {
+          await this.markRecoveryCaptureFlushed(captureId);
+        }
+
+        if (name !== "recovery_status" && name !== "recovery_resolve") {
+          const pending = await this.listPendingRecoveryRecords();
+          if (pending.length > 0 && Array.isArray(result?.content) && result.content.length > 0) {
+            const first = result.content[0];
+            if (first?.type === "text" && typeof first.text === "string") {
+              first.text += `\n\nRecovery notice: ${pending.length} pending auto-capture item(s) detected from interrupted operations. Run recovery_status, then recovery_resolve(confirm=true, action=\"commit\"|\"discard\").`;
+            }
+          }
+        }
+
+        return result;
+      } catch (error) {
+        if (captureId) {
+          await this.markRecoveryCapturePendingError(captureId, error);
+        }
+        throw error;
+      }
+    });
   }
 
   private getSafetyBlockMessage(
@@ -131,6 +189,97 @@ export class MCPProjectContextServer {
     }
 
     return null;
+  }
+
+  private recoveryBaseDir(): string {
+    return path.join(this.store.getDataDir(), "recovery");
+  }
+
+  private recoveryPendingDir(): string {
+    return path.join(this.recoveryBaseDir(), "pending");
+  }
+
+  private recoveryResolvedDir(): string {
+    return path.join(this.recoveryBaseDir(), "resolved");
+  }
+
+  private async ensureRecoveryDirs(): Promise<void> {
+    await fs.ensureDir(this.recoveryPendingDir());
+    await fs.ensureDir(this.recoveryResolvedDir());
+  }
+
+  private async listPendingRecoveryRecords(): Promise<any[]> {
+    await this.ensureRecoveryDirs();
+    const pendingDir = this.recoveryPendingDir();
+    const files = (await fs.readdir(pendingDir))
+      .filter((name) => name.endsWith(".json"))
+      .sort();
+    const records: any[] = [];
+    for (const file of files) {
+      try {
+        const payload = await fs.readJson(path.join(pendingDir, file));
+        records.push(payload);
+      } catch {
+        // ignore malformed recovery files
+      }
+    }
+    return records;
+  }
+
+  private async beginRecoveryCapture(
+    tool: string,
+    args: unknown
+  ): Promise<string> {
+    await this.ensureRecoveryDirs();
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+      id,
+      status: "pending",
+      tool,
+      args,
+      createdAt: toLocalISOString(),
+      updatedAt: toLocalISOString(),
+      note: "Auto-captured before mutating operation.",
+    };
+    await fs.writeJson(path.join(this.recoveryPendingDir(), `${id}.json`), payload, {
+      spaces: 2,
+    });
+    return id;
+  }
+
+  private async markRecoveryCaptureFlushed(captureId: string): Promise<void> {
+    await this.ensureRecoveryDirs();
+    const pendingFile = path.join(this.recoveryPendingDir(), `${captureId}.json`);
+    if (!(await fs.pathExists(pendingFile))) {
+      return;
+    }
+    const payload = await fs.readJson(pendingFile);
+    payload.status = "flushed";
+    payload.updatedAt = toLocalISOString();
+    await fs.writeJson(
+      path.join(this.recoveryResolvedDir(), `${captureId}.flushed.json`),
+      payload,
+      { spaces: 2 }
+    );
+    await fs.remove(pendingFile);
+  }
+
+  private async markRecoveryCapturePendingError(
+    captureId: string,
+    error: unknown
+  ): Promise<void> {
+    await this.ensureRecoveryDirs();
+    const pendingFile = path.join(this.recoveryPendingDir(), `${captureId}.json`);
+    if (!(await fs.pathExists(pendingFile))) {
+      return;
+    }
+    const payload = await fs.readJson(pendingFile);
+    payload.status = "pending_recovery";
+    payload.updatedAt = toLocalISOString();
+    payload.error = error instanceof Error ? error.message : String(error);
+    payload.note =
+      "Previous mutating operation may have been interrupted. Resolve via recovery_resolve.";
+    await fs.writeJson(pendingFile, payload, { spaces: 2 });
   }
 
   private setupTools(): void {
@@ -233,6 +382,102 @@ export class MCPProjectContextServer {
             {
               type: "text",
               text: JSON.stringify(snippets, null, 2),
+            },
+          ],
+        };
+      }
+    );
+
+    this.registerTool(
+      "recovery_status",
+      {
+        title: "Recovery Status",
+        description: "List pending auto-capture items from interrupted operations",
+        inputSchema: {},
+      },
+      async () => {
+        const pending = await this.listPendingRecoveryRecords();
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  pendingCount: pending.length,
+                  pending,
+                  guidance:
+                    "Run recovery_resolve with confirm=true and action=commit|discard for a pendingId.",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+    );
+
+    this.registerTool(
+      "recovery_resolve",
+      {
+        title: "Recovery Resolve",
+        description:
+          "Commit or discard a pending auto-capture item after reconnect",
+        inputSchema: {
+          pendingId: z.string().describe("Pending recovery capture ID"),
+          action: z
+            .enum(["commit", "discard"])
+            .describe("Resolve action to take"),
+          confirm: z
+            .boolean()
+            .default(false)
+            .describe("Set true to confirm resolution"),
+        },
+      },
+      async ({ pendingId, action, confirm }: any) => {
+        if (!confirm) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Resolution blocked. Re-run with confirm=true.",
+              },
+            ],
+          };
+        }
+
+        await this.ensureRecoveryDirs();
+        const pendingFile = path.join(
+          this.recoveryPendingDir(),
+          `${pendingId}.json`
+        );
+        if (!(await fs.pathExists(pendingFile))) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Pending recovery item not found: ${pendingId}`,
+              },
+            ],
+          };
+        }
+
+        const payload = await fs.readJson(pendingFile);
+        payload.status = action === "commit" ? "committed" : "discarded";
+        payload.resolvedAt = toLocalISOString();
+        payload.resolutionAction = action;
+        await fs.writeJson(
+          path.join(this.recoveryResolvedDir(), `${pendingId}.${action}.json`),
+          payload,
+          { spaces: 2 }
+        );
+        await fs.remove(pendingFile);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Recovery item ${pendingId} marked as ${payload.status}.`,
             },
           ],
         };
@@ -972,6 +1217,68 @@ export class MCPProjectContextServer {
               {
                 type: "text",
                 text: `Error creating checkpoint: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    // Prepare Compaction
+    this.registerTool(
+      "prepare_compaction",
+      {
+        title: "Prepare Compaction",
+        description:
+          "Create a recovery checkpoint before compaction or long context cleanup",
+        inputSchema: {
+          projectId: z.string().describe("Project ID"),
+          name: z
+            .string()
+            .optional()
+            .describe("Optional checkpoint name"),
+          includeSessions: z
+            .boolean()
+            .default(true)
+            .describe("Include sessions in checkpoint snapshot"),
+        },
+      },
+      async ({ projectId, name, includeSessions }: any) => {
+        try {
+          const checkpointName =
+            name || `auto-compaction-${new Date().toISOString()}`;
+          const checkpoint = await this.contextManager.createCheckpoint(
+            projectId,
+            checkpointName,
+            "Automatic checkpoint created before compaction-style cleanup.",
+            includeSessions
+          );
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    ok: true,
+                    checkpointId: checkpoint.checkpointId,
+                    checkpointName: checkpoint.name,
+                    guidance:
+                      "Proceed with compaction/cleanup. If anything goes wrong, use restore_checkpoint.",
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error preparing compaction: ${
                   error instanceof Error ? error.message : "Unknown error"
                 }`,
               },

@@ -99,6 +99,14 @@ Data is stored as JSON files in a `data` directory relative to the server workin
 - **Consistent Safety Guards**
   - Shared safety confirmation behavior is used for `end_session`, `restore_checkpoint`, `restore_latest_checkpoint`, and `delete_checkpoint`.
 
+- **Crash Recovery Auto-Capture + Compaction Prep**
+  - Mutating tool calls are auto-captured to `data/recovery/pending` before execution.
+  - Successful writes are auto-flushed to `data/recovery/resolved` (no stale pending file).
+  - Interrupted operations remain in pending and are surfaced after reconnect.
+  - `prepare_compaction` creates a checkpoint before cleanup/compaction-style operations.
+  - `recovery_status` lists unresolved auto-captures.
+  - `recovery_resolve` confirms `commit` or `discard` for pending captures.
+
 - **Tool Profiles (Context Overhead Control)**
   - Server supports `TOOL_PROFILE=minimal|standard|full`.
   - `minimal` exposes only core planning/session/checkpoint tools.
@@ -346,6 +354,14 @@ Once configured, Claude Code will automatically start and connect to your MCP se
   - **Use for**: getting paste-ready env snippets for all profiles.
   - **Input**: none.
 
+- `recovery_status`
+  - **Use for**: listing pending auto-capture items from interrupted operations.
+  - **Input**: none.
+
+- `recovery_resolve`
+  - **Use for**: resolving one pending auto-capture (`commit` or `discard`).
+  - **Input**: `pendingId`, `action`, `confirm=true`.
+
 ### Project Context
 
 - `create_project`
@@ -434,6 +450,10 @@ Once configured, Claude Code will automatically start and connect to your MCP se
   - **Input**: `checkpointId`, `force`.
   - **Safety**: requires `force=true`.
 
+- `prepare_compaction`
+  - **Use for**: creating an automatic recovery checkpoint before context cleanup.
+  - **Input**: `projectId`, optional `name`, `includeSessions`.
+
 ### Quick Cheat Sheet
 
 | Command | Required Inputs | Common Optional Inputs |
@@ -441,6 +461,8 @@ Once configured, Claude Code will automatically start and connect to your MCP se
 | `tool_profile_status` | — | — |
 | `set_tool_profile` | `profile` | — |
 | `tool_profile_snippets` | — | — |
+| `recovery_status` | — | — |
+| `recovery_resolve` | `pendingId`, `action` | `confirm` |
 | `create_project` | `name`, `description`, `currentPhase` | `techStack` |
 | `get_project_context` | `projectId` | `section`, `channel`, `category`, `taskStatus`, `taskPriority`, `createdAfter`, `createdBefore`, `sort`, `limit`, `offset`, `keyPattern` |
 | `list_projects` | — | — |
@@ -458,6 +480,7 @@ Once configured, Claude Code will automatically start and connect to your MCP se
 | `restore_checkpoint` | `checkpointId` | `restoreSessions`, `safeMode`, `force` |
 | `restore_latest_checkpoint` | `projectId` | `restoreSessions`, `safeMode`, `force` |
 | `delete_checkpoint` | `checkpointId`, `force` | — |
+| `prepare_compaction` | `projectId` | `name`, `includeSessions` |
 
 ## Data Storage
 
@@ -477,6 +500,9 @@ data/
 │   ├── encoded-file-1.json
 │   ├── encoded-file-2.json
 │   └── encoded-file-3.json
+├── recovery/
+│   ├── pending/
+│   └── resolved/
 └── sessions/
     ├── session-uuid-1.json
     ├── session-uuid-2.json

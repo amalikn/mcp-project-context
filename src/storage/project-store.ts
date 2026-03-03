@@ -29,6 +29,10 @@ export class ProjectStore {
     this.ensureDirectories();
   }
 
+  getDataDir(): string {
+    return this.dataDir;
+  }
+
   private async ensureDirectories(): Promise<void> {
     await fs.ensureDir(this.projectsDir);
     await fs.ensureDir(this.sessionsDir);
