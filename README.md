@@ -38,10 +38,10 @@ Change Once Checklist:
   - `ps aux | rg "mcp-project-context|dist/index.js" | rg -v rg`
   - server working dir should be `<MCP_DATA_BASE>/mcp-project-context`
 
-My Local Example:
+Path placeholders and example values:
 
-- `<MCP_BASE>` = `/Volumes/Data/_ai/_mcp`
-- `<MCP_DATA_BASE>` = `/Volumes/Data/_ai/mcp-data`
+- `<MCP_BASE>` = <path-to-mcp-repos> (example: `/Volumes/Data/_ai/_mcp/mcp_stuff`)
+- `<MCP_DATA_BASE>` = <path-to-mcp-data-root> (example: `/Volumes/Data/_ai/mcp-data`)
 
 ## How It Works
 
