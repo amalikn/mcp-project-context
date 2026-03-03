@@ -22,6 +22,7 @@ export const TaskSchema = z.object({
   description: z.string().optional(),
   status: TaskStatusSchema,
   priority: z.enum(["low", "medium", "high", "critical"]),
+  channel: z.string().optional(),
   assignee: z.string().optional(),
   tags: z.array(z.string()).default([]),
   createdAt: z.string(),
@@ -58,6 +59,7 @@ export const ProjectContextSchema = z.object({
         id: z.string(),
         decision: z.string(),
         reasoning: z.string(),
+        channel: z.string().optional(),
         timestamp: z.string(),
         impact: z.string().optional(),
       })
@@ -69,6 +71,7 @@ export const ProjectContextSchema = z.object({
         id: z.string(),
         content: z.string(),
         timestamp: z.string(),
+        channel: z.string().optional(),
         category: z.string().optional(),
       })
     )
@@ -81,6 +84,7 @@ export const ProjectContextSchema = z.object({
 export const SessionContextSchema = z.object({
   sessionId: z.string(),
   projectId: z.string(),
+  channel: z.string().optional(),
   startTime: z.string(),
   endTime: z.string().optional(),
   goals: z.array(z.string()).default([]),
@@ -89,8 +93,27 @@ export const SessionContextSchema = z.object({
   nextSession: z.array(z.string()).default([]),
 });
 
+export const CheckpointContextSchema = z.object({
+  checkpointId: z.string(),
+  projectId: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  createdAt: z.string(),
+  projectSnapshot: ProjectContextSchema,
+  sessionSnapshots: z.array(SessionContextSchema).default([]),
+});
+
+export const FileCacheEntrySchema = z.object({
+  filePath: z.string(),
+  hash: z.string(),
+  size: z.number(),
+  updatedAt: z.string(),
+});
+
 export type ProjectContext = z.infer<typeof ProjectContextSchema>;
 export type Task = z.infer<typeof TaskSchema>;
 export type SessionContext = z.infer<typeof SessionContextSchema>;
+export type CheckpointContext = z.infer<typeof CheckpointContextSchema>;
+export type FileCacheEntry = z.infer<typeof FileCacheEntrySchema>;
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;

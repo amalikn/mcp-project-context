@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --exec tsx src/index.ts",
+    "migrate:timestamps:local": "node scripts/migrate-timestamps-local.mjs",
     "docker:build": "docker build -t mcp-project-context .",
     "docker:run": "docker-compose up -d"
   },

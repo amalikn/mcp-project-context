@@ -1,0 +1,169 @@
+{
+  "id": "a5d1b889-120e-4406-a969-e0d76f4be654",
+  "name": "mcp-project-context",
+  "description": "Enhanced MCP server for persistent project context with safety guards, checkpoints, channels, file-change tracking, token-aware responses, and Codex+Claude setup documentation.",
+  "status": "planning",
+  "techStack": {
+    "frontend": [],
+    "backend": [
+      "Node.js",
+      "TypeScript"
+    ],
+    "database": [],
+    "infrastructure": [
+      "Local JSON storage"
+    ],
+    "tools": [
+      "MCP SDK",
+      "Codex CLI",
+      "Claude Code",
+      "nvm"
+    ]
+  },
+  "architecture": {
+    "observability": []
+  },
+  "currentPhase": "integration-and-documentation",
+  "nextSteps": [],
+  "tasks": [
+    {
+      "id": "90275f48-a3cc-472d-94ad-cac97ce5ace8",
+      "title": "Run full TypeScript build verification on local machine",
+      "description": "Validate compile/test on host environment since sandbox had intermittent tsc Signal 6 issues.",
+      "status": "todo",
+      "priority": "high",
+      "channel": "stabilization",
+      "tags": [
+        "validation",
+        "build"
+      ],
+      "createdAt": "2026-03-03T05:37:15.284Z",
+      "updatedAt": "2026-03-03T05:37:15.284Z",
+      "blockers": [],
+      "dependencies": []
+    },
+    {
+      "id": "5bf99dd0-1911-4daf-b026-e0595f585d29",
+      "title": "Add restore/delete safety tests",
+      "description": "Add focused tests for safeMode/force guard behavior across end_session and checkpoint tools.",
+      "status": "todo",
+      "priority": "medium",
+      "channel": "features",
+      "tags": [
+        "tests",
+        "safety"
+      ],
+      "createdAt": "2026-03-03T05:37:21.465Z",
+      "updatedAt": "2026-03-03T05:37:21.465Z",
+      "blockers": [],
+      "dependencies": []
+    },
+    {
+      "id": "133bdfe4-8d3d-444f-8d06-3563fe59d30a",
+      "title": "Evaluate project-scoped Codex MCP registration when available",
+      "description": "Track Codex CLI updates and switch docs/commands from global to project scope when supported.",
+      "status": "todo",
+      "priority": "low",
+      "channel": "codex",
+      "tags": [
+        "codex",
+        "future"
+      ],
+      "createdAt": "2026-03-03T05:37:31.415Z",
+      "updatedAt": "2026-03-03T05:37:31.415Z",
+      "blockers": [],
+      "dependencies": []
+    },
+    {
+      "id": "efa52b0b-59e8-4daa-b24d-828e2be084b2",
+      "title": "Implement high/medium ROI feature set and docs",
+      "description": "Ship checkpoints, safety guards, channels, file cache, token limiting, tool profiles, and cross-client docs for Claude + Codex.",
+      "status": "completed",
+      "priority": "critical",
+      "channel": "implementation",
+      "tags": [
+        "milestone",
+        "completed-candidate"
+      ],
+      "createdAt": "2026-03-03T05:37:38.411Z",
+      "updatedAt": "2026-03-03T05:37:45.683Z",
+      "completedAt": "2026-03-03T05:37:45.683Z",
+      "blockers": [],
+      "dependencies": []
+    }
+  ],
+  "decisions": [
+    {
+      "id": "687cdaad-22cc-4efd-b6df-fa7df3e4199e",
+      "decision": "Run the server via a Node 22 launcher script (`scripts/run-mcp.sh`) using nvm rather than relying on global Node 25.",
+      "reasoning": "TypeScript/tsx runtime behavior was unstable under Node 25 in this environment, while Node 22 is compatible and keeps system defaults untouched.",
+      "channel": "runtime",
+      "timestamp": "2026-03-03T05:36:03.109Z",
+      "impact": "Reliable local startup for Claude/Codex while preserving existing system Node configuration."
+    },
+    {
+      "id": "d46b41f0-a697-4bc1-b027-a288b914ea55",
+      "decision": "Apply explicit confirmation guards (`safeMode` + `force`) to destructive or state-altering tools.",
+      "reasoning": "Checkpoint restore/delete and session finalization should be protected from accidental invocation in agentic workflows.",
+      "channel": "safety",
+      "timestamp": "2026-03-03T05:36:12.273Z",
+      "impact": "Safer operations and clearer human-in-the-loop control semantics."
+    },
+    {
+      "id": "d1420545-e983-44a7-9090-d7a7afe3b76e",
+      "decision": "Introduce tool profiles (`minimal`, `standard`, `full`) and profile helper tools (`tool_profile_status`, `set_tool_profile`, `tool_profile_snippets`).",
+      "reasoning": "Reducing exposed tool count lowers context overhead and helps tailor capability surfaces per workflow.",
+      "channel": "tooling",
+      "timestamp": "2026-03-03T05:36:18.724Z",
+      "impact": "Better model focus, easier profile switching, and improved operator visibility into active tools."
+    },
+    {
+      "id": "12659921-0fe9-4fb6-ae43-4a6f52716f64",
+      "decision": "Register this MCP server in Codex global MCP configuration using `codex mcp add` and the local launcher script.",
+      "reasoning": "Current Codex MCP management is global; project-scoped registration is documented as future behavior.",
+      "channel": "codex",
+      "timestamp": "2026-03-03T05:36:26.834Z",
+      "impact": "Immediate Codex usability with reproducible command and verification steps in docs."
+    }
+  ],
+  "notes": [
+    {
+      "id": "d3d329c0-7290-47b5-81d2-968d24b9ca98",
+      "content": "Implemented high-ROI enhancements: persisted end_session updates, checkpoint create/list/restore/latest/delete flow, and advanced get_project_context filtering (section/channel/category/status/priority/date/sort/pagination/regex).",
+      "timestamp": "2026-03-03T05:36:36.417Z",
+      "channel": "implementation",
+      "category": "progress"
+    },
+    {
+      "id": "4c21be22-6a7a-4854-9f51-6a44fbe512da",
+      "content": "Implemented medium-ROI enhancements: channel-aware tasks/notes/decisions/sessions with list_channels, git-derived channel support for start_session, and file hash caching with file_changed detection.",
+      "timestamp": "2026-03-03T05:36:43.421Z",
+      "channel": "implementation",
+      "category": "progress"
+    },
+    {
+      "id": "b15dd0b6-b429-46b0-8df1-21fdfee0377b",
+      "content": "Added token-aware response truncation to get_project_context using environment variables MCP_MAX_TOKENS, MCP_TOKEN_SAFETY_BUFFER, and MCP_CHARS_PER_TOKEN.",
+      "timestamp": "2026-03-03T05:36:49.156Z",
+      "channel": "implementation",
+      "category": "progress"
+    },
+    {
+      "id": "e8661d59-7681-45b7-a0ac-2eecf95b122c",
+      "content": "README now includes comprehensive enhancement coverage (high + medium ROI), Claude setup, Codex setup, profile/token env config, safety semantics, and post-install verification checklist; added scripts/smoke-checklist.md for quick validation.",
+      "timestamp": "2026-03-03T05:36:55.198Z",
+      "channel": "documentation",
+      "category": "docs"
+    },
+    {
+      "id": "829be2f1-54ce-4768-b1db-8b4af8945a68",
+      "content": "Verified Codex integration: `codex mcp add` registration succeeded and `codex mcp list/get` showed correct command; live launcher probe emitted 'MCP Project Context Server connected and listening' outside sandbox.",
+      "timestamp": "2026-03-03T05:37:06.046Z",
+      "channel": "codex",
+      "category": "verification"
+    }
+  ],
+  "createdAt": "2026-03-03T05:35:44.027Z",
+  "updatedAt": "2026-03-03T05:37:45.683Z",
+  "lastAccessedAt": "2026-03-03T05:37:45.682Z"
+}

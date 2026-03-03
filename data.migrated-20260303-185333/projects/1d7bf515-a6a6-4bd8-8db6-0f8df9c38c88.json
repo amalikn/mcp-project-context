@@ -1,0 +1,130 @@
+{
+  "id": "1d7bf515-a6a6-4bd8-8db6-0f8df9c38c88",
+  "name": "mcp-memory-keeper",
+  "description": "Configure and validate MCP Memory Keeper integration with Codex CLI.",
+  "status": "planning",
+  "techStack": {
+    "frontend": [],
+    "backend": [],
+    "database": [],
+    "infrastructure": [],
+    "tools": [
+      "Codex CLI",
+      "MCP",
+      "Node.js/npx"
+    ]
+  },
+  "architecture": {
+    "observability": []
+  },
+  "currentPhase": "configuration",
+  "nextSteps": [],
+  "tasks": [],
+  "decisions": [
+    {
+      "id": "8dc3483e-b1d0-47e9-819d-bf0933987f31",
+      "decision": "Use npx invocation for memory-keeper MCP server in Codex config.",
+      "reasoning": "npx-based setup is portable and aligns with upstream README examples, reducing dependency on local repo path/launcher location.",
+      "channel": "codex-mcp-config",
+      "timestamp": "2026-03-03T06:01:59.775Z",
+      "impact": "Codex can resolve and run memory-keeper without hardcoded local script paths."
+    },
+    {
+      "id": "3350c45d-922c-4f57-b82b-2dfd25d78d11",
+      "decision": "Use local built entrypoint for Memory Keeper in Codex instead of npx.",
+      "reasoning": "Codex logs showed MCP startup timeout with `npx mcp-memory-keeper` under a 10s startup window; direct `node dist/index.js` removes npx/package resolution overhead.",
+      "channel": "codex-mcp-config",
+      "timestamp": "2026-03-03T06:10:15.044Z",
+      "impact": "Memory Keeper should initialize within timeout and expose tools in Codex MCP tool list after session restart."
+    }
+  ],
+  "notes": [
+    {
+      "id": "be44b325-ae31-4d4b-a7e9-91d25273daec",
+      "content": "Updated Codex user config at ~/.codex/config.toml to use npx-based Memory Keeper MCP server: [mcp_servers.memory-keeper] command=\"npx\", args=[\"mcp-memory-keeper\"]. Replaced prior local launcher.sh command. User should restart Codex session to load updated MCP server.",
+      "timestamp": "2026-03-03T06:01:56.132Z",
+      "channel": "codex-mcp-config",
+      "category": "implementation"
+    },
+    {
+      "id": "87de8c4a-6b31-4d7f-93e7-5f7ebf2afb78",
+      "content": "Built mcp-memory-keeper locally (`npm install && npm run build`) and changed Codex MCP config to launch local server directly: [mcp_servers.memory-keeper] command=\"node\", args=[\"/Volumes/Data/_ai/_mcp/mcp_stuff/mcp-memory-keeper/dist/index.js\"]. This avoids npx startup timeout during Codex MCP initialization.",
+      "timestamp": "2026-03-03T06:10:11.225Z",
+      "channel": "codex-mcp-config",
+      "category": "implementation"
+    },
+    {
+      "id": "a54fb88e-bb0f-450e-a17a-9029473abb24",
+      "content": "Updated README.md to include complete 38-tool catalog with one-line usage descriptions, added missing usage examples for context_search_all/context_diff/context_list_channels/context_channel_stats, and updated Current Features header version to v0.12.0. Verified all 38 tools are now mentioned and have at least one usage example in README.",
+      "timestamp": "2026-03-03T06:23:49.946Z",
+      "channel": "docs",
+      "category": "documentation"
+    },
+    {
+      "id": "edf2f65c-0c8b-4c82-8586-0d5404c60695",
+      "content": "Performed consistency sweep for EXAMPLES.md and API.md against 38-memory-keeper tool list. Added EXAMPLES section for context_set_project_dir/context_diff/context_list_channels/context_channel_stats and TOC entry. Added API sections for context_set_project_dir, context_status, context_prepare_compaction, context_git_commit; added Git & Compaction TOC entry; marked context_delete as legacy with context_batch_delete recommendation. Re-verified all 38 tools are now mentioned in README.md, EXAMPLES.md, and API.md.",
+      "timestamp": "2026-03-03T06:32:32.639Z",
+      "channel": "docs",
+      "category": "documentation"
+    },
+    {
+      "id": "b9831700-cae1-4be0-b108-737d824a83f0",
+      "content": "Performed parameter-accuracy sweep against src/index.ts input schemas. Fixed outdated params in API.md and EXAMPLES.md (session_list filters removed, save priority enum corrected, watch pollTimeout usage, removed deprecated export/import params like includeStats/sessionIds/outputPath/mergeStrategy, updated search examples to use context_search_all + category, corrected git_commit message requirement, and aligned channel_stats params to includeTimeSeries/includeInsights/sessionId/channel).",
+      "timestamp": "2026-03-03T06:38:54.999Z",
+      "channel": "docs",
+      "category": "documentation"
+    },
+    {
+      "id": "a24a3274-3447-41ff-9034-84bd8696cc2b",
+      "content": "README.md parameter-accuracy pass completed against src/index.ts schemas. Fixed invalid context_get priority filter to priorities array, replaced context_delegate analysisResults with insights, corrected timeline relativeTime boolean to natural-language string, and changed compress preserveCategories example from decision/critical to decision/warning.",
+      "timestamp": "2026-03-03T06:43:50.594Z",
+      "channel": "docs",
+      "category": "documentation"
+    },
+    {
+      "id": "f2f5b2cf-850c-4bb9-98e8-e74bf559d8e1",
+      "content": "Configured both Codex and Claude memory-keeper servers to use shared data dir /Volumes/Data/_ai/mcp-data/memory-keeper by wrapping startup in bash -lc with cd to target directory and exec node dist/index.js. Migrated current DB from ~/mcp-data/memory-keeper (newer) to shared dir and created timestamped backups in source/target directories. Claude user-scope memory-keeper now reports connected with new command.",
+      "timestamp": "2026-03-03T06:54:10.150Z",
+      "channel": "config",
+      "category": "implementation"
+    },
+    {
+      "id": "e6c79f73-5d31-4a90-b95c-04c65196f93f",
+      "content": "Implemented shared-DB coordination conventions inside memory-keeper DB at /Volumes/Data/_ai/mcp-data/memory-keeper: created sessions codex-main and claude-main with matching default channels, and saved shared keys in channel shared-conventions (shared:working-agreement and shared:working-agreement-ref) to guide cross-tool usage and minimize conflicts.",
+      "timestamp": "2026-03-03T07:02:02.532Z",
+      "channel": "workflow",
+      "category": "implementation"
+    },
+    {
+      "id": "68b87cec-dba0-418b-b354-b7974a9af51c",
+      "content": "README.md updated with enhancements: clarified default storage behavior for npx/launcher vs direct node, added Codex CLI setup section, added shared DB setup for Claude+Codex using /Volumes/Data/_ai/mcp-data/memory-keeper, included verification commands (claude mcp get, ps/lsof), and added multi-client conventions to reduce logical conflicts when both tools write to the same DB.",
+      "timestamp": "2026-03-03T07:04:07.026Z",
+      "channel": "docs",
+      "category": "documentation"
+    },
+    {
+      "id": "a1169cb9-cde1-45c8-b4da-9de2ff0252ce",
+      "content": "Added README migration subsection under shared DB setup: safe backup-and-copy commands to consolidate existing Claude/Codex context.db files into shared path, plus optional SQLite row-count verification snippet.",
+      "timestamp": "2026-03-03T07:05:00.771Z",
+      "channel": "docs",
+      "category": "documentation"
+    },
+    {
+      "id": "b886fb16-466f-48c4-8ec9-357384c27f80",
+      "content": "Added rollback instructions to README migration section: restore context.db/context.db-wal/context.db-shm from timestamped .bak files and restart Claude/Codex sessions after rollback.",
+      "timestamp": "2026-03-03T07:05:37.692Z",
+      "channel": "docs",
+      "category": "documentation"
+    },
+    {
+      "id": "9ff1c8ed-cbfe-41fd-9cd7-5de4d407fe89",
+      "content": "Configured user-scope efficiency defaults for both Claude and Codex: memory-keeper and mcp-project-context now run via stable bash/node commands and both set TOOL_PROFILE=standard. Verified with `claude mcp get` and `codex mcp get` that both servers are connected and env profile is active.",
+      "timestamp": "2026-03-03T07:49:27.626Z",
+      "channel": "config",
+      "category": "implementation"
+    }
+  ],
+  "createdAt": "2026-03-03T06:01:49.917Z",
+  "updatedAt": "2026-03-03T07:49:27.626Z",
+  "lastAccessedAt": "2026-03-03T07:49:27.624Z"
+}

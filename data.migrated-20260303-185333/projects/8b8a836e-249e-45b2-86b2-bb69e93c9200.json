@@ -1,0 +1,98 @@
+{
+  "id": "8b8a836e-249e-45b2-86b2-bb69e93c9200",
+  "name": "podbng-lab",
+  "description": "Virtual BNG (Broadband Network Gateway) lab environment provisioned via OpenTofu on Proxmox VE 9.1.5 (malik-pve01, 172.16.254.83). 8 VMs deployed using bpg/proxmox provider with cloud-init vendor/user data split. Used for testing IPoE/PPPoE subscriber management, DPDK/VPP-based BNG, and AAA.",
+  "status": "planning",
+  "techStack": {
+    "frontend": [],
+    "backend": [
+      "OpenTofu",
+      "Proxmox VE 9.1.5",
+      "bpg/proxmox provider"
+    ],
+    "database": [],
+    "infrastructure": [
+      "Ubuntu 24.04 cloud-init",
+      "netplan",
+      "systemd-networkd",
+      "VRF",
+      "DPDK/uio_pci_generic",
+      "VPP",
+      "GRUB hugepages"
+    ],
+    "tools": [
+      "Make",
+      "ssh",
+      "cloud-init",
+      "netplan"
+    ]
+  },
+  "architecture": {
+    "observability": []
+  },
+  "currentPhase": "Stage 1 Verification - fixing VRF, hugepages, cloud-init merge issues",
+  "nextSteps": [],
+  "tasks": [
+    {
+      "id": "2de20494-2c87-4bae-8ca7-6b7ca633f909",
+      "title": "Fix VRF on 6 VMs (live + template)",
+      "description": "VRF missing on bng-1, bng-2, ctrl-1, ctrl-2, upstream-router, ipoe-client. Root cause: cloud-init replaces vendor data write_files+runcmd with user data versions. Fix: added merge_how to all role templates. Live fix: push 99-vrf-mgmt.yaml, install linux-modules-extra, modprobe vrf, netplan apply.",
+      "status": "in-progress",
+      "priority": "high",
+      "tags": [
+        "vrf",
+        "cloud-init",
+        "networking",
+        "live-fix"
+      ],
+      "createdAt": "2026-03-03T03:42:40.644Z",
+      "updatedAt": "2026-03-03T03:43:23.593Z",
+      "blockers": [],
+      "dependencies": []
+    },
+    {
+      "id": "65c4393e-ab0e-41b7-a356-f370c6c03fd9",
+      "title": "Fix ipoe-client cloud-init error (dhclient)",
+      "description": "ipoe-client failed with PackageInstallerError: dhclient not found in Ubuntu 24.04. Fixed in template: replaced dhclient with isc-dhcp-client in packages list. Live fix: install isc-dhcp-client manually.",
+      "status": "todo",
+      "priority": "high",
+      "tags": [
+        "ipoe-client",
+        "cloud-init",
+        "packages"
+      ],
+      "createdAt": "2026-03-03T03:42:40.689Z",
+      "updatedAt": "2026-03-03T03:42:40.689Z",
+      "blockers": [],
+      "dependencies": []
+    },
+    {
+      "id": "c3bf6f8c-b1ec-4153-a912-112944585ed1",
+      "title": "Complete Stage 1 verification",
+      "description": "Verify all 8 VMs: hugepages=1024 on bng-1/2, VRF vrf-mgmt on all, IPv6 disabled, mgmt IPs reachable, cloud-init done, static IPs (eth3/eth4 on bng, eth1 on ctrl/upstream).",
+      "status": "todo",
+      "priority": "high",
+      "tags": [
+        "verification",
+        "stage1"
+      ],
+      "createdAt": "2026-03-03T03:42:40.767Z",
+      "updatedAt": "2026-03-03T03:42:40.767Z",
+      "blockers": [],
+      "dependencies": []
+    }
+  ],
+  "decisions": [
+    {
+      "id": "0e0d560c-1d50-48ca-9467-895c88d5d416",
+      "decision": "Added pppoe-client VM (VMID 207) and renumbered aaa-test to VMID 208",
+      "reasoning": "Testing plan requires PPPoE subscriber testing alongside IPoE. pppoe-client uses eth1 on bridge_access with rp-pppoe.so plugin. aaa-test shifted to 208 to free VMID 207.",
+      "timestamp": "2026-03-03T04:00:21.636Z",
+      "impact": "9 VMs total now. New pppoe-client.yaml.tftpl created. cloud-init merge issue fix (merge_how) applied to pppoe-client template too."
+    }
+  ],
+  "notes": [],
+  "createdAt": "2026-03-03T03:42:26.178Z",
+  "updatedAt": "2026-03-03T06:37:21.432Z",
+  "lastAccessedAt": "2026-03-03T06:37:21.432Z"
+}

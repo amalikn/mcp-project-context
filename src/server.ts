@@ -3,11 +3,14 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { ProjectStore } from "./storage/project-store.js";
 import { ContextManager } from "./storage/context-manager.js";
+import { toLocalISOString } from "./utils/time.js";
 
 export class MCPProjectContextServer {
   private server: McpServer;
   private store: ProjectStore;
   private contextManager: ContextManager;
+  private activeTools: Set<string>;
+  private selectedToolProfile: string;
 
   constructor() {
     this.server = new McpServer({
@@ -17,12 +20,227 @@ export class MCPProjectContextServer {
 
     this.store = new ProjectStore();
     this.contextManager = new ContextManager(this.store);
+    const profileResolution = this.resolveToolProfile();
+    this.selectedToolProfile = profileResolution.profile;
+    this.activeTools = profileResolution.tools;
     this.setupTools();
   }
 
+  private resolveToolProfile(): { profile: string; tools: Set<string> } {
+    const allTools = [
+      "tool_profile_status",
+      "set_tool_profile",
+      "tool_profile_snippets",
+      "create_project",
+      "get_project_context",
+      "list_projects",
+      "list_channels",
+      "add_task",
+      "update_task",
+      "add_note",
+      "record_decision",
+      "cache_file",
+      "file_changed",
+      "start_session",
+      "end_session",
+      "create_checkpoint",
+      "restore_checkpoint",
+      "list_checkpoints",
+      "restore_latest_checkpoint",
+      "delete_checkpoint",
+    ] as const;
+
+    const profiles: Record<string, string[]> = {
+      minimal: [
+        "tool_profile_status",
+        "set_tool_profile",
+        "tool_profile_snippets",
+        "create_project",
+        "get_project_context",
+        "list_projects",
+        "add_task",
+        "update_task",
+        "start_session",
+        "end_session",
+        "create_checkpoint",
+        "restore_latest_checkpoint",
+      ],
+      standard: [
+        "tool_profile_status",
+        "set_tool_profile",
+        "tool_profile_snippets",
+        "create_project",
+        "get_project_context",
+        "list_projects",
+        "list_channels",
+        "add_task",
+        "update_task",
+        "add_note",
+        "record_decision",
+        "cache_file",
+        "file_changed",
+        "start_session",
+        "end_session",
+        "create_checkpoint",
+        "restore_checkpoint",
+        "list_checkpoints",
+        "restore_latest_checkpoint",
+      ],
+      full: [...allTools],
+    };
+
+    const selectedProfile = (process.env.TOOL_PROFILE || "full").trim();
+    const toolList = profiles[selectedProfile] || profiles.full;
+
+    if (!profiles[selectedProfile]) {
+      console.error(
+        `Unknown TOOL_PROFILE "${selectedProfile}", falling back to "full"`
+      );
+    }
+
+    return {
+      profile: profiles[selectedProfile] ? selectedProfile : "full",
+      tools: new Set(toolList),
+    };
+  }
+
+  private registerTool(
+    name: string,
+    definition: any,
+    handler: any
+  ): void {
+    if (!this.activeTools.has(name)) {
+      return;
+    }
+
+    this.server.registerTool(name, definition, handler);
+  }
+
+  private getSafetyBlockMessage(
+    action: string,
+    target: string,
+    force: boolean,
+    safeMode?: boolean
+  ): string | null {
+    if (safeMode === undefined && !force) {
+      return `${action} blocked for ${target}. Re-run with force=true to confirm.`;
+    }
+
+    if (safeMode === true && !force) {
+      return `${action} blocked for ${target}. Re-run with force=true when safeMode is enabled.`;
+    }
+
+    return null;
+  }
+
   private setupTools(): void {
+    // Tool Profile Status
+    this.registerTool(
+      "tool_profile_status",
+      {
+        title: "Tool Profile Status",
+        description: "Show active TOOL_PROFILE and enabled tools",
+        inputSchema: {},
+      },
+      async () => {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  profile: this.selectedToolProfile,
+                  enabledToolCount: this.activeTools.size,
+                  enabledTools: [...this.activeTools].sort(),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+    );
+
+    // Set Tool Profile (Guided)
+    this.registerTool(
+      "set_tool_profile",
+      {
+        title: "Set Tool Profile",
+        description:
+          "Get instructions to change TOOL_PROFILE in Claude MCP config (requires restart)",
+        inputSchema: {
+          profile: z
+            .enum(["minimal", "standard", "full"])
+            .describe("Desired tool profile"),
+        },
+      },
+      async ({ profile }: any) => {
+        const changed = profile !== this.selectedToolProfile;
+
+        const instructions = [
+          `Requested profile: ${profile}`,
+          `Current profile: ${this.selectedToolProfile}`,
+          "Update your MCP server env with:",
+          `{ \"TOOL_PROFILE\": \"${profile}\" }`,
+          "Then restart Claude Code / MCP session.",
+        ].join("\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: changed
+                ? instructions
+                : `Profile is already set to ${profile}. No config change needed.`,
+            },
+          ],
+        };
+      }
+    );
+
+    // Tool Profile Snippets
+    this.registerTool(
+      "tool_profile_snippets",
+      {
+        title: "Tool Profile Snippets",
+        description:
+          "Get paste-ready Claude MCP env snippets for minimal, standard, and full profiles",
+        inputSchema: {},
+      },
+      async () => {
+        const snippets = {
+          minimal: {
+            env: {
+              TOOL_PROFILE: "minimal",
+            },
+          },
+          standard: {
+            env: {
+              TOOL_PROFILE: "standard",
+            },
+          },
+          full: {
+            env: {
+              TOOL_PROFILE: "full",
+            },
+          },
+          note: "Set one of these under your mcp server env and restart Claude Code / MCP session.",
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(snippets, null, 2),
+            },
+          ],
+        };
+      }
+    );
+
     // Create Project
-    this.server.registerTool(
+    this.registerTool(
       "create_project",
       {
         title: "Create Project",
@@ -42,7 +260,7 @@ export class MCPProjectContextServer {
           currentPhase: z.string().describe("Current project phase"),
         },
       },
-      async ({ name, description, techStack, currentPhase }) => {
+      async ({ name, description, techStack, currentPhase }: any) => {
         try {
           const project = await this.store.createProject({
             name,
@@ -88,20 +306,86 @@ export class MCPProjectContextServer {
     );
 
     // Get Project Context
-    this.server.registerTool(
+    this.registerTool(
       "get_project_context",
       {
         title: "Get Project Context",
         description: "Get comprehensive project context and current state",
         inputSchema: {
           projectId: z.string().describe("Project ID"),
+          section: z
+            .enum(["all", "tasks", "notes", "decisions", "sessions"])
+            .optional()
+            .describe("Optional section filter"),
+          channel: z
+            .string()
+            .optional()
+            .describe("Optional channel filter"),
+          category: z
+            .string()
+            .optional()
+            .describe("Optional category filter (notes/decisions)"),
+          taskStatus: z
+            .enum(["todo", "in-progress", "blocked", "completed"])
+            .optional()
+            .describe("Optional task status filter"),
+          taskPriority: z
+            .enum(["low", "medium", "high", "critical"])
+            .optional()
+            .describe("Optional task priority filter"),
+          createdAfter: z
+            .string()
+            .optional()
+            .describe("ISO date filter: include entries created after"),
+          createdBefore: z
+            .string()
+            .optional()
+            .describe("ISO date filter: include entries created before"),
+          sort: z
+            .enum(["created_desc", "created_asc", "updated_desc", "updated_asc"])
+            .optional()
+            .describe("Sort order"),
+          limit: z.number().int().positive().optional().describe("Page size"),
+          offset: z
+            .number()
+            .int()
+            .nonnegative()
+            .optional()
+            .describe("Pagination offset"),
+          keyPattern: z
+            .string()
+            .optional()
+            .describe("Optional regex for matching content"),
         },
       },
-      async ({ projectId }) => {
+      async ({
+        projectId,
+        section,
+        channel,
+        category,
+        taskStatus,
+        taskPriority,
+        createdAfter,
+        createdBefore,
+        sort,
+        limit,
+        offset,
+        keyPattern,
+      }: any) => {
         try {
-          const context = await this.contextManager.getCurrentContext(
-            projectId
-          );
+          const context = await this.contextManager.getCurrentContext(projectId, {
+            section,
+            channel,
+            category,
+            taskStatus,
+            taskPriority,
+            createdAfter,
+            createdBefore,
+            sort,
+            limit,
+            offset,
+            keyPattern,
+          });
           return {
             content: [
               {
@@ -126,7 +410,7 @@ export class MCPProjectContextServer {
     );
 
     // List Projects
-    this.server.registerTool(
+    this.registerTool(
       "list_projects",
       {
         title: "List Projects",
@@ -169,8 +453,51 @@ export class MCPProjectContextServer {
       }
     );
 
+    // List Channels
+    this.registerTool(
+      "list_channels",
+      {
+        title: "List Channels",
+        description: "List channels with task/note/decision/session counts",
+        inputSchema: {
+          projectId: z.string().describe("Project ID"),
+        },
+      },
+      async ({ projectId }: any) => {
+        try {
+          const channels = await this.store.listChannels(projectId);
+          const channelList = channels
+            .map(
+              (channel) =>
+                `- ${channel.channel}: tasks=${channel.taskCount}, notes=${channel.noteCount}, decisions=${channel.decisionCount}, sessions=${channel.sessionCount}`
+            )
+            .join("\n");
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Channels:\n${channelList || "No channels found"}`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error listing channels: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
     // Add Task
-    this.server.registerTool(
+    this.registerTool(
       "add_task",
       {
         title: "Add Task",
@@ -183,15 +510,20 @@ export class MCPProjectContextServer {
             .enum(["low", "medium", "high", "critical"])
             .describe("Task priority"),
           tags: z.array(z.string()).default([]).describe("Task tags"),
+          channel: z
+            .string()
+            .optional()
+            .describe("Task channel for grouped context"),
         },
       },
-      async ({ projectId, title, description, priority, tags }) => {
+      async ({ projectId, title, description, priority, tags, channel }: any) => {
         try {
           const task = await this.contextManager.addTask(projectId, {
             title,
             description: description || "",
             status: "todo",
             priority,
+            channel: channel || "general",
             tags: tags || [],
             blockers: [],
             dependencies: [],
@@ -220,7 +552,7 @@ export class MCPProjectContextServer {
     );
 
     // Update Task
-    this.server.registerTool(
+    this.registerTool(
       "update_task",
       {
         title: "Update Task",
@@ -240,7 +572,7 @@ export class MCPProjectContextServer {
             .describe("New task priority"),
         },
       },
-      async ({ projectId, taskId, status, title, description, priority }) => {
+      async ({ projectId, taskId, status, title, description, priority }: any) => {
         try {
           const updatedTask = await this.contextManager.updateTask(
             projectId,
@@ -276,7 +608,7 @@ export class MCPProjectContextServer {
     );
 
     // Add Note
-    this.server.registerTool(
+    this.registerTool(
       "add_note",
       {
         title: "Add Note",
@@ -285,11 +617,15 @@ export class MCPProjectContextServer {
           projectId: z.string().describe("Project ID"),
           content: z.string().describe("Note content"),
           category: z.string().optional().describe("Note category"),
+          channel: z
+            .string()
+            .optional()
+            .describe("Note channel for grouped context"),
         },
       },
-      async ({ projectId, content, category }) => {
+      async ({ projectId, content, category, channel }: any) => {
         try {
-          await this.contextManager.addNote(projectId, content, category);
+          await this.contextManager.addNote(projectId, content, category, channel);
           return {
             content: [
               {
@@ -314,7 +650,7 @@ export class MCPProjectContextServer {
     );
 
     // Record Decision
-    this.server.registerTool(
+    this.registerTool(
       "record_decision",
       {
         title: "Record Decision",
@@ -327,15 +663,20 @@ export class MCPProjectContextServer {
             .string()
             .optional()
             .describe("Expected impact of the decision"),
+          channel: z
+            .string()
+            .optional()
+            .describe("Decision channel for grouped context"),
         },
       },
-      async ({ projectId, decision, reasoning, impact }) => {
+      async ({ projectId, decision, reasoning, impact, channel }: any) => {
         try {
           await this.contextManager.recordDecision(
             projectId,
             decision,
             reasoning,
-            impact
+            impact,
+            channel
           );
           return {
             content: [
@@ -360,8 +701,92 @@ export class MCPProjectContextServer {
       }
     );
 
+    // Cache File
+    this.registerTool(
+      "cache_file",
+      {
+        title: "Cache File",
+        description: "Cache file content hash for change detection",
+        inputSchema: {
+          filePath: z.string().describe("File path"),
+          content: z.string().describe("Current file content"),
+        },
+      },
+      async ({ filePath, content }: any) => {
+        try {
+          const entry = await this.contextManager.cacheFile(filePath, content);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `File cached: ${entry.filePath} (hash: ${entry.hash.slice(
+                  0,
+                  12
+                )}...)`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error caching file: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    // File Changed
+    this.registerTool(
+      "file_changed",
+      {
+        title: "File Changed",
+        description: "Check if file content changed from cached hash",
+        inputSchema: {
+          filePath: z.string().describe("File path"),
+          currentContent: z
+            .string()
+            .optional()
+            .describe("Optional current file content to compare"),
+        },
+      },
+      async ({ filePath, currentContent }: any) => {
+        try {
+          const result = await this.contextManager.checkFileChanged(
+            filePath,
+            currentContent
+          );
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error checking file change: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
     // Start Session
-    this.server.registerTool(
+    this.registerTool(
       "start_session",
       {
         title: "Start Session",
@@ -369,13 +794,30 @@ export class MCPProjectContextServer {
         inputSchema: {
           projectId: z.string().describe("Project ID"),
           goals: z.array(z.string()).describe("Session goals"),
+          channel: z
+            .string()
+            .optional()
+            .describe("Optional session channel"),
+          projectDir: z
+            .string()
+            .optional()
+            .describe("Optional project path for git-based channel derivation"),
+          deriveChannelFromGit: z
+            .boolean()
+            .default(false)
+            .describe("Derive channel from git branch when projectDir is provided"),
         },
       },
-      async ({ projectId, goals }) => {
+      async ({ projectId, goals, channel, projectDir, deriveChannelFromGit }: any) => {
         try {
+          const resolvedChannel = deriveChannelFromGit
+            ? await this.contextManager.deriveChannelFromGit(projectDir)
+            : channel || "general";
+
           const session = await this.store.createSession({
             projectId,
-            startTime: new Date().toISOString(),
+            channel: resolvedChannel,
+            startTime: toLocalISOString(),
             goals,
             achievements: [],
             blockers: [],
@@ -385,7 +827,7 @@ export class MCPProjectContextServer {
             content: [
               {
                 type: "text",
-                text: `Session started with ID: ${session.sessionId}`,
+                text: `Session started with ID: ${session.sessionId} on channel: ${resolvedChannel}`,
               },
             ],
           };
@@ -405,7 +847,7 @@ export class MCPProjectContextServer {
     );
 
     // End Session
-    this.server.registerTool(
+    this.registerTool(
       "end_session",
       {
         title: "End Session",
@@ -424,17 +866,55 @@ export class MCPProjectContextServer {
             .array(z.string())
             .default([])
             .describe("Plans for next session"),
+          safeMode: z
+            .boolean()
+            .default(false)
+            .describe("If true, require force=true to end session"),
+          force: z
+            .boolean()
+            .default(false)
+            .describe("Set true to confirm ending session when safeMode is enabled"),
         },
       },
-      async ({ sessionId, achievements, blockers, nextSession }) => {
+      async ({
+        sessionId,
+        achievements,
+        blockers,
+        nextSession,
+        safeMode,
+        force,
+      }: any) => {
         try {
-          // Note: You'll need to implement updateSession in ProjectStore
-          // For now, just return success
+          const safetyMessage = this.getSafetyBlockMessage(
+            "Ending session",
+            sessionId,
+            force,
+            safeMode
+          );
+
+          if (safetyMessage) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: safetyMessage,
+                },
+              ],
+            };
+          }
+
+          const updatedSession = await this.store.updateSession(sessionId, {
+            endTime: toLocalISOString(),
+            achievements,
+            blockers,
+            nextSession,
+          });
+
           return {
             content: [
               {
                 type: "text",
-                text: `Session ${sessionId} ended successfully`,
+                text: `Session ${updatedSession.sessionId} ended successfully`,
               },
             ],
           };
@@ -452,12 +932,333 @@ export class MCPProjectContextServer {
         }
       }
     );
+
+    // Create Checkpoint
+    this.registerTool(
+      "create_checkpoint",
+      {
+        title: "Create Checkpoint",
+        description: "Create a project checkpoint snapshot",
+        inputSchema: {
+          projectId: z.string().describe("Project ID"),
+          name: z.string().describe("Checkpoint name"),
+          description: z.string().optional().describe("Checkpoint description"),
+          includeSessions: z
+            .boolean()
+            .default(true)
+            .describe("Include project sessions in the checkpoint"),
+        },
+      },
+      async ({ projectId, name, description, includeSessions }: any) => {
+        try {
+          const checkpoint = await this.contextManager.createCheckpoint(
+            projectId,
+            name,
+            description,
+            includeSessions
+          );
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Checkpoint "${checkpoint.name}" created with ID: ${checkpoint.checkpointId}`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error creating checkpoint: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    // Restore Checkpoint
+    this.registerTool(
+      "restore_checkpoint",
+      {
+        title: "Restore Checkpoint",
+        description: "Restore a project from a saved checkpoint",
+        inputSchema: {
+          checkpointId: z.string().describe("Checkpoint ID"),
+          restoreSessions: z
+            .boolean()
+            .default(true)
+            .describe("Restore sessions from checkpoint"),
+          safeMode: z
+            .boolean()
+            .default(false)
+            .describe("If true, require force=true to restore"),
+          force: z
+            .boolean()
+            .default(false)
+            .describe("Set true to confirm restore when safeMode is enabled"),
+        },
+      },
+      async ({ checkpointId, restoreSessions, safeMode, force }: any) => {
+        try {
+          const safetyMessage = this.getSafetyBlockMessage(
+            "Restore",
+            `checkpoint ${checkpointId}`,
+            force,
+            safeMode
+          );
+
+          if (safetyMessage) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: safetyMessage,
+                },
+              ],
+            };
+          }
+
+          const result = await this.contextManager.restoreCheckpoint(
+            checkpointId,
+            restoreSessions
+          );
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Checkpoint restored for project ${result.projectId}. Restored sessions: ${result.restoredSessions}`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error restoring checkpoint: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    // List Checkpoints
+    this.registerTool(
+      "list_checkpoints",
+      {
+        title: "List Checkpoints",
+        description: "List checkpoints for a project ordered by newest",
+        inputSchema: {
+          projectId: z.string().describe("Project ID"),
+          limit: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("Optional number of checkpoints to return"),
+        },
+      },
+      async ({ projectId, limit }: any) => {
+        try {
+          const checkpoints = await this.store.listProjectCheckpoints(projectId);
+          const capped = limit
+            ? checkpoints.slice(0, Math.max(1, limit))
+            : checkpoints;
+
+          const checkpointList = capped
+            .map(
+              (checkpoint) =>
+                `- ${checkpoint.name} (${checkpoint.checkpointId}) - ${new Date(
+                  checkpoint.createdAt
+                ).toLocaleString()}${
+                  checkpoint.description
+                    ? ` - ${checkpoint.description}`
+                    : ""
+                }`
+            )
+            .join("\n");
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Checkpoints:\n${checkpointList || "No checkpoints found"}`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error listing checkpoints: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    // Restore Latest Checkpoint
+    this.registerTool(
+      "restore_latest_checkpoint",
+      {
+        title: "Restore Latest Checkpoint",
+        description: "Restore the newest checkpoint for a project",
+        inputSchema: {
+          projectId: z.string().describe("Project ID"),
+          restoreSessions: z
+            .boolean()
+            .default(true)
+            .describe("Restore sessions from checkpoint"),
+          safeMode: z
+            .boolean()
+            .default(false)
+            .describe("If true, require force=true to restore"),
+          force: z
+            .boolean()
+            .default(false)
+            .describe("Set true to confirm restore when safeMode is enabled"),
+        },
+      },
+      async ({ projectId, restoreSessions, safeMode, force }: any) => {
+        try {
+          const checkpoints = await this.store.listProjectCheckpoints(projectId);
+          const latestCheckpoint = checkpoints[0];
+
+          if (!latestCheckpoint) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `No checkpoints found for project ${projectId}`,
+                },
+              ],
+            };
+          }
+
+          const safetyMessage = this.getSafetyBlockMessage(
+            "Restore",
+            `latest checkpoint ${latestCheckpoint.checkpointId}`,
+            force,
+            safeMode
+          );
+
+          if (safetyMessage) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: safetyMessage,
+                },
+              ],
+            };
+          }
+
+          const result = await this.contextManager.restoreCheckpoint(
+            latestCheckpoint.checkpointId,
+            restoreSessions
+          );
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Restored latest checkpoint "${latestCheckpoint.name}" (${latestCheckpoint.checkpointId}) for project ${result.projectId}. Restored sessions: ${result.restoredSessions}`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error restoring latest checkpoint: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    // Delete Checkpoint
+    this.registerTool(
+      "delete_checkpoint",
+      {
+        title: "Delete Checkpoint",
+        description: "Delete a checkpoint by ID",
+        inputSchema: {
+          checkpointId: z.string().describe("Checkpoint ID"),
+          force: z
+            .boolean()
+            .default(false)
+            .describe("Set true to confirm checkpoint deletion"),
+        },
+      },
+      async ({ checkpointId, force }: any) => {
+        try {
+          const safetyMessage = this.getSafetyBlockMessage(
+            "Deletion",
+            `checkpoint ${checkpointId}`,
+            force
+          );
+
+          if (safetyMessage) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: safetyMessage,
+                },
+              ],
+            };
+          }
+
+          const deleted = await this.store.deleteCheckpoint(checkpointId);
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: deleted
+                  ? `Checkpoint ${checkpointId} deleted successfully`
+                  : `Checkpoint ${checkpointId} not found`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error deleting checkpoint: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
   }
 
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.log("MCP Project Context Server connected and listening");
+    console.error("MCP Project Context Server connected and listening");
 
     // Keep the process alive
     process.stdin.on("close", () => {
