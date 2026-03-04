@@ -13,3 +13,8 @@ Repository-local revision summary.
 | `c8e20f0` | `2025-07-22T18:03:31-05:00` | Enhance MCPProjectContextServer with task management features |
 | `bcb883e` | `2025-07-22T18:02:49-05:00` | Add documentation link for TypeScript SDK in README.md |
 | `f9d8924` | `2025-07-22T18:02:39-05:00` | Update zod dependency version in package.json and pnpm-lock.yaml |
+
+## 2026-03-05
+
+- Added explicit "Session-Close (exit)" capability guidance in README.
+- Documented recommended close-session tool usage: end_session, add_note, record_decision, create_checkpoint.

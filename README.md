@@ -65,6 +65,21 @@ Data is stored as JSON files in a `data` directory relative to the server workin
 - **Session Goals**: Track what you planned vs what you achieved
 - **File-Based Storage**: Simple JSON storage that's easy to understand and backup
 
+### Session-Close Capability (`exit` Workflow)
+
+For Codex and Claude Code sessions, Project Context supports a standard session-close persistence pattern:
+
+- On `exit`, finalize the active session with a durable handoff summary.
+- Persist achievements, blockers, and explicit next-session actions before closing.
+- Keep project-level decisions and status updated so resumed sessions start with accurate context.
+
+Recommended tools for this workflow:
+
+- `end_session` to persist achievements/blockers/nextSession
+- `add_note` for operator handoff notes
+- `record_decision` for project-level policy/state updates
+- `create_checkpoint` for a restorable project snapshot before major context switches
+
 ## Enhancements Implemented (High & Medium ROI)
 
 ### High ROI Enhancements
