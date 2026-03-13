@@ -83,21 +83,21 @@
     },
     {
       "id": "f2f5b2cf-850c-4bb9-98e8-e74bf559d8e1",
-      "content": "Configured both Codex and Claude memory-keeper servers to use shared data dir /Volumes/Data/_ai/mcp-data/memory-keeper by wrapping startup in bash -lc with cd to target directory and exec node dist/index.js. Migrated current DB from ~/mcp-data/memory-keeper (newer) to shared dir and created timestamped backups in source/target directories. Claude user-scope memory-keeper now reports connected with new command.",
+      "content": "Configured both Codex and Claude memory-keeper servers to use shared data dir /Volumes/Data/_ai/_mcp/mcp-data/memory-keeper by wrapping startup in bash -lc with cd to target directory and exec node dist/index.js. Migrated current DB from ~/mcp-data/memory-keeper (newer) to shared dir and created timestamped backups in source/target directories. Claude user-scope memory-keeper now reports connected with new command.",
       "timestamp": "2026-03-03T06:54:10.150Z",
       "channel": "config",
       "category": "implementation"
     },
     {
       "id": "e6c79f73-5d31-4a90-b95c-04c65196f93f",
-      "content": "Implemented shared-DB coordination conventions inside memory-keeper DB at /Volumes/Data/_ai/mcp-data/memory-keeper: created sessions codex-main and claude-main with matching default channels, and saved shared keys in channel shared-conventions (shared:working-agreement and shared:working-agreement-ref) to guide cross-tool usage and minimize conflicts.",
+      "content": "Implemented shared-DB coordination conventions inside memory-keeper DB at /Volumes/Data/_ai/_mcp/mcp-data/memory-keeper: created sessions codex-main and claude-main with matching default channels, and saved shared keys in channel shared-conventions (shared:working-agreement and shared:working-agreement-ref) to guide cross-tool usage and minimize conflicts.",
       "timestamp": "2026-03-03T07:02:02.532Z",
       "channel": "workflow",
       "category": "implementation"
     },
     {
       "id": "68b87cec-dba0-418b-b354-b7974a9af51c",
-      "content": "README.md updated with enhancements: clarified default storage behavior for npx/launcher vs direct node, added Codex CLI setup section, added shared DB setup for Claude+Codex using /Volumes/Data/_ai/mcp-data/memory-keeper, included verification commands (claude mcp get, ps/lsof), and added multi-client conventions to reduce logical conflicts when both tools write to the same DB.",
+      "content": "README.md updated with enhancements: clarified default storage behavior for npx/launcher vs direct node, added Codex CLI setup section, added shared DB setup for Claude+Codex using /Volumes/Data/_ai/_mcp/mcp-data/memory-keeper, included verification commands (claude mcp get, ps/lsof), and added multi-client conventions to reduce logical conflicts when both tools write to the same DB.",
       "timestamp": "2026-03-03T07:04:07.026Z",
       "channel": "docs",
       "category": "documentation"

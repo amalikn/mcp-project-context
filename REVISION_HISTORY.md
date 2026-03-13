@@ -18,3 +18,7 @@ Repository-local revision summary.
 
 - Added explicit "Session-Close (exit)" capability guidance in README.
 - Documented recommended close-session tool usage: end_session, add_note, record_decision, create_checkpoint.
+
+## 2026-03-13
+- Recorded and prepared local enhancements for publication.
+- Updated repository documentation to reflect current operational and integration changes.
